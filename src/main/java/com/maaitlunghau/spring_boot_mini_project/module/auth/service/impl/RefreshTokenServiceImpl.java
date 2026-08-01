@@ -92,12 +92,12 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
         RefreshToken token = refreshTokenRepository.findByTokenHashForUpdate(oldHash)
             .orElseThrow(() -> new InvalidRefreshTokenException("Refresh token is invalid or expired!"));
 
-        if (token.isExpired()) {
-            throw new InvalidRefreshTokenException("Refresh is expired!");
-        }
         if (token.isRevoked()) {
             self.revokeAllSessions(token.getUserId(), RevokeReason.REUSE_DETECTED);
             throw new RefreshTokenReuseException("Refresh token reuse detected. All devices have been signed out.");
+        }
+        if (token.isExpired()) {
+            throw new InvalidRefreshTokenException("Refresh is expired!");
         }
 
         token.revoke(RevokeReason.ROTATED);
