@@ -10,8 +10,11 @@ import java.util.Base64;
 import java.util.HexFormat;
 import java.util.List;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.maaitlunghau.spring_boot_mini_project.exception.InvalidRefreshTokenException;
@@ -29,6 +32,16 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
     private final RefreshTokenRepository refreshTokenRepository;
     private final long refreshTokenExpirationMs;
     private final long refreshTokenAbsoluteExpirationMs;
+
+    /**
+     * Self-injected proxy so revokeAllSessions() is invoked THROUGH Spring's
+     * transactional proxy (not a bypassed self-invocation), letting its
+     * REQUIRES_NEW propagation actually commit independently of rotate()'s
+     * own transaction, which may still roll back afterwards.
+     */
+    @Lazy
+    @Autowired
+    private RefreshTokenService self;
 
     public RefreshTokenServiceImpl(
         RefreshTokenRepository refreshTokenRepository,
@@ -83,7 +96,7 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
             throw new InvalidRefreshTokenException("Refresh is expired!");
         }
         if (token.isRevoked()) {
-            revokeAllSessions(token.getUserId(), RevokeReason.REUSE_DETECTED);
+            self.revokeAllSessions(token.getUserId(), RevokeReason.REUSE_DETECTED);
             throw new RefreshTokenReuseException("Refresh token reuse detected. All devices have been signed out.");
         }
 
@@ -119,7 +132,7 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
     * Hiện chỉ gọi khi phát hiện reuse
     */
     @Override
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void revokeAllSessions(Long userId, RevokeReason reason) {
         refreshTokenRepository.findByUserIdAndRevokedFalseOrderByCreatedAtDesc(userId)
             .forEach(t -> t.revoke(reason));
