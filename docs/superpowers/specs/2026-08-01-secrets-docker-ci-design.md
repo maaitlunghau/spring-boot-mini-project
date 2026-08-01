@@ -94,7 +94,7 @@ Three services, one bridge network, named volumes for persistence:
   volume `mysql_data:/var/lib/mysql`, healthcheck via `mysqladmin ping`.
 - `redis`: `redis:7-alpine`, volume `redis_data:/data`.
 - `phpmyadmin`: `phpmyadmin:latest`, `PMA_HOST=mysql`, depends_on mysql
-  (healthy), exposed on a host port (e.g. 8082) to avoid clashing with the app's
+  (healthy), exposed on a host port (e.g. 8080) to avoid clashing with the app's
   8081.
 
 `env_file: .env` on the services that need credentials.

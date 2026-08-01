@@ -247,7 +247,7 @@ git commit -m "feat: add multi-stage production dockerfile"
   `.env` next to `docker-compose.yml` is auto-loaded by Compose — no extra
   config needed for `${VAR}` substitution inside this file).
 - Produces: `mysql` reachable at `localhost:3306`, `redis` at
-  `localhost:6379`, `phpmyadmin` UI at `localhost:8082` — matches the
+  `localhost:6379`, `phpmyadmin` UI at `localhost:8080` — matches the
   `MYSQL_HOST=localhost` / `REDIS_HOST=localhost` values the app already
   expects from Task 1.
 
@@ -294,7 +294,7 @@ services:
       PMA_USER: ${DB_USERNAME}
       PMA_PASSWORD: ${DB_PASSWORD}
     ports:
-      - "8082:80"
+      - "8080:80"
     depends_on:
       mysql:
         condition: service_healthy
@@ -335,7 +335,7 @@ to become healthy — re-run `docker compose ps` if it's still `starting`).
 Run: `docker exec spring-boot-mini-project-redis redis-cli ping`
 Expected: `PONG`
 
-Run: `curl -s -o /dev/null -w "%{http_code}" http://localhost:8082`
+Run: `curl -s -o /dev/null -w "%{http_code}" http://localhost:8080`
 Expected: `200`
 
 - [ ] **Step 5: Go back and finish Task 1 Step 6 now that MySQL is up**
