@@ -64,6 +64,7 @@ public class AuthServiceImpl implements AuthService {
         userRepository.save(user);
     }
 
+    @Transactional
     public AuthResponse login(LoginRequest request, String deviceInfo, String ip) {
         authenticationManager.authenticate(
             new UsernamePasswordAuthenticationToken(request.email(), request.password())
@@ -84,6 +85,7 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
+    @Transactional
     public AuthResponse refreshToken(String rawRefreshToken, String deviceInfo, String ip) {
         RotationResult rotation = refreshTokenService.rotate(rawRefreshToken, deviceInfo, ip);
 
@@ -100,6 +102,7 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
+    @Transactional
     public void logout(String accessToken) {
         String jti = jwtService.extractJti(accessToken);
         String sessionId = jwtService.extractSessionId(accessToken);
