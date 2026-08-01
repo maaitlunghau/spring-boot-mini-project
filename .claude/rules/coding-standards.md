@@ -1,180 +1,35 @@
-<!-- # Coding Standards — Java Spring Boot
+# Coding Standards — spring-boot-mini-project
 
-## Naming Conventions
+## Naming
 
-### Classes & Files
+| Kind | Convention | Example |
+|------|-----------|---------|
+| Controller | `<Domain>Controller` | `AuthController` |
+| Service interface | `<Domain>Service` | `RefreshTokenService` |
+| Service impl | `<Domain>ServiceImpl` | `RefreshTokenServiceImpl` |
+| Repository | `<Domain>Repository` | `UserRepository` |
+| Entity | `<Domain>` (no suffix) | `User`, `RefreshToken` |
+| Request DTO | `<Verb><Domain>Request` | `CreateUserRequest`, `LoginRequest` |
+| Response DTO | `<Domain>Response` | `UserResponse`, `AuthResponse` |
+| Exception | `<Reason>Exception`, extends `AppException` | `DuplicateResourceException` |
+| Config | `<Concern>Config` | `SecurityConfig` |
+| Unit test | `<ClassName>Test` | `RefreshTokenServiceImplTest` |
+| Integration test | `<ClassName>IntegrationTest` | `AuthServiceImplIntegrationTest` |
 
-| Loại | Convention | Ví dụ |
-|------|-----------|-------|
-| Controller | `PascalCase + Controller` | `UserController.java` |
-| Service | `PascalCase + Service` | `UserService.java` |
-| Service impl | `PascalCase + ServiceImpl` | `UserServiceImpl.java` |
-| Repository | `PascalCase + Repository` | `UserRepository.java` |
-| Entity | `PascalCase` (tên domain) | `User.java`, `Order.java` |
-| DTO (response) | `PascalCase + Dto` hoặc `Response` | `UserDto.java`, `UserResponse.java` |
-| DTO (request) | `PascalCase + Request` | `CreateUserRequest.java` |
-| Exception | `PascalCase + Exception` | `ResourceNotFoundException.java` |
-| Config | `PascalCase + Config` | `SecurityConfig.java` |
-| Test | `[ClassName] + Test` | `UserServiceTest.java` |
-| Integration Test | `[ClassName] + IT` | `UserControllerIT.java` |
+Classes `PascalCase`, methods/variables `camelCase`, constants `UPPER_SNAKE_CASE`, packages `lowercase.no_separators`.
 
-### Code
+## Java patterns actually used in this codebase
 
-- **Classes**: `PascalCase` — `UserService`, `OrderController`
-- **Methods & variables**: `camelCase` — `findById()`, `userRepository`
-- **Constants**: `UPPER_SNAKE_CASE` — `MAX_RETRY_COUNT`, `DEFAULT_PAGE_SIZE`
-- **Packages**: `lowercase.dots` — `com.example.springmvc.controller`
-- **Enums**: class `PascalCase`, values `UPPER_SNAKE_CASE`
-
-```java
-public enum UserRole {
-    ADMIN,
-    USER,
-    MODERATOR
-}
-```
-
-## Java Patterns
-
-### Constructor Injection (bắt buộc dùng)
-
-```java
-// ✅ ĐÚNG — constructor injection: tường minh, dễ test, immutable dependency
-@Service
-public class UserService {
-    private final UserRepository userRepository;
-
-    public UserService(UserRepository userRepository) {
-        this.userRepository = userRepository;
-    }
-}
-
-// ❌ TRÁNH — field injection: khó test, che giấu dependency
-@Service
-public class UserService {
-    @Autowired
-    private UserRepository userRepository;
-}
-```
-
-### Java Records cho DTO (Java 16+)
-
-```java
-// Concise, immutable — dùng cho DTO
-public record UserDto(Long id, String name, String email) {
-    public static UserDto from(User user) {
-        return new UserDto(user.getId(), user.getName(), user.getEmail());
-    }
-}
-
-public record CreateUserRequest(
-    @NotBlank(message = "Name is required") String name,
-    @Email @NotBlank(message = "Valid email is required") String email
-) {}
-```
-
-### Optional — tránh return null
-
-```java
-// ✅ ĐÚNG — trả về Optional, để caller quyết định
-public Optional<User> findByEmail(String email) {
-    return userRepository.findByEmail(email);
-}
-
-// ✅ ĐÚNG — throw exception khi không tìm thấy
-public UserDto findById(Long id) {
-    return userRepository.findById(id)
-        .map(UserDto::from)
-        .orElseThrow(() -> new ResourceNotFoundException("User", id));
-}
-
-// ❌ TRÁNH — return null
-public User findByEmail(String email) {
-    return userRepository.findByEmail(email).orElse(null);
-}
-```
-
-### @Transactional
-
-```java
-// Đặt readOnly = true ở class level, override cho write operations
-@Service
-@Transactional(readOnly = true)
-public class UserService {
-
-    public UserDto findById(Long id) { ... }      // readOnly = true (thừa kế)
-
-    @Transactional                                  // readOnly = false (override)
-    public UserDto create(CreateUserRequest req) { ... }
-
-    @Transactional
-    public void delete(Long id) { ... }
-}
-```
-
-## Import Order
-
-IntelliJ IDEA tự sắp xếp. Thứ tự chuẩn:
-
-```java
-// 1. java.* và javax.*
-import java.util.List;
-import java.util.Optional;
-
-// 2. Third-party libs
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
-// 3. Internal project packages
-import com.example.myapp.entity.User;
-import com.example.myapp.repository.UserRepository;
-```
-
-## Formatting
-
-- Indent: **4 spaces** (Java standard — không dùng tabs)
-- Max line length: 120 chars
-- Braces: **K&R style** (mở ngoặc cùng dòng)
-- Blank line giữa các method
-- Dùng IntelliJ IDEA built-in formatter hoặc `google-java-format`
+- **Constructor injection only.** No `@Autowired` field injection anywhere — keep it that way.
+- **Records for every DTO.** No Lombok on DTOs — records already give boilerplate-free immutability.
+- **Lombok `@Getter` on entities** (not `@Data`, not `@Setter`) — mutation goes through named domain methods (`revoke()`, `changeRole()`), not setters. See any entity under `module/*/entity/` for the pattern.
+- **`Optional` from repositories, never a bare null return.** Callers either `.map(...)` or `.orElseThrow(() -> new ResourceNotFoundException(...))`.
+- **`@Transactional(readOnly = true)` at class level, override per write method** — see the gotcha callout in `backend-patterns.md`. Not optional — skipping the override is exactly the bug already fixed once in this repo.
 
 ## Comments
 
-- Chỉ comment khi **WHY** không rõ từ code
-- Không comment "what" — tên biến/method đã nói lên điều đó
-- Javadoc cho public API trong shared library (không bắt buộc trong learning project)
+Only when the *why* isn't obvious from the code — a workaround, a non-obvious constraint, a subtle invariant. Never a comment restating what a well-named method already says. `RefreshTokenServiceImpl`'s existing inline comments (explaining intent for the reuse-detection/rotation logic) are the right calibration — imitate that, don't add more than that.
 
-```java
-// ✅ Comment WHY — giải thích lý do không hiển nhiên
-// H2 requires DB_CLOSE_DELAY=-1 để giữ connection pool không đóng DB sớm
-String url = "jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1";
+## Tests
 
-// ❌ Comment WHAT — thừa
-// Tìm user theo id
-return userRepository.findById(id);
-```
-
-## Test Conventions
-
-```java
-// Tên test: should_[expected]_when_[condition]
-@Test
-void should_return_user_when_id_exists() { ... }
-
-@Test
-void should_throw_exception_when_user_not_found() { ... }
-
-// Cấu trúc: Arrange - Act - Assert
-@Test
-void should_save_user_successfully() {
-    // Arrange
-    CreateUserRequest request = new CreateUserRequest("Alice", "alice@example.com");
-
-    // Act
-    UserDto result = userService.create(request);
-
-    // Assert
-    assertThat(result.name()).isEqualTo("Alice");
-    assertThat(result.id()).isNotNull();
-}
-``` -->
+Name tests for the behavior, not the method under test: `loginPersistsARefreshTokenRow`, `rotateDetectsReuseEvenWhenTheRevokedTokenIsAlsoExpired` — see the existing test classes under `src/test/java` for the house style. Arrange/Act/Assert; no comment headers needed if the test is short enough to read as one block.

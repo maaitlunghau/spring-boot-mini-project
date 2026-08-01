@@ -1,74 +1,24 @@
-<!-- # Tech Defaults — Spring Boot
+# Tech Defaults — spring-boot-mini-project
 
-Khi thêm tính năng mới vào bất kỳ sub-project nào, dùng các thư viện sau. Không thêm alternative mà không thảo luận trước.
+The actual stack already in `pom.xml` — don't add an alternative without discussing it first.
 
-## Spring Boot Starters
+| Concern | Dependency | Notes |
+|---------|-----------|-------|
+| Web | `spring-boot-starter-webmvc` | Spring Boot 4 renamed this from `-web` to disambiguate from WebFlux |
+| JPA | `spring-boot-starter-data-jpa` | Hibernate |
+| Security | `spring-boot-starter-security` | + `jjwt-api`/`jjwt-impl`/`jjwt-jackson` 0.13.0 for JWT |
+| Validation | `spring-boot-starter-validation` | Jakarta Bean Validation |
+| Redis | `spring-boot-starter-data-redis` | token blacklist + rate limiting |
+| Database driver | `com.mysql:mysql-connector-j` (runtime) | MySQL 8.4 only — no H2, no alternate drivers |
+| API docs | `springdoc-openapi-starter-webmvc-ui` 3.0.0 | public Swagger UI at `/swagger-ui/index.html` — deliberate choice, see `docs/known-issues.md` |
+| Lombok | `org.projectlombok:lombok` (optional) | `@Getter` on entities only — see `coding-standards.md` |
 
-| Concern | Dependency | Ghi chú |
-|---------|-----------|---------|
-| Web / REST API | `spring-boot-starter-web` | Jackson tự động, embedded Tomcat |
-| JPA / Hibernate | `spring-boot-starter-data-jpa` | Spring Data JPA + Hibernate |
-| Security | `spring-boot-starter-security` | Auth & Authorization |
-| Validation | `spring-boot-starter-validation` | Bean Validation (Jakarta) |
-| Testing | `spring-boot-starter-test` | JUnit 5 + Mockito + Spring Test |
-| Actuator | `spring-boot-starter-actuator` | Health check, metrics |
-| DevTools | `spring-boot-devtools` | Hot reload, H2 console tự enable |
+- **Java 21**, **Spring Boot 4.1.0** — parent POM manages transitive versions, don't pin them individually.
+- **Build**: Maven via `./mvnw` — never assume a global `mvn` install.
+- **Test stack**: JUnit 5 + Mockito + AssertJ, pulled in transitively via the split `spring-boot-starter-*-test` starters this Spring Boot version uses.
 
-## Database
+## Not used in this project
 
-| Môi trường | Dependency | Ghi chú |
-|-----------|-----------|---------|
-| Mặc định (dev + persist) | `com.mysql:mysql-connector-j` (scope: runtime) | MySQL 8, dùng kèm Docker |
-| In-memory (quick test) | `com.h2database:h2` (scope: runtime) | Optional — không cần cài đặt |
-| SQL Server | `com.microsoft.sqlserver:mssql-jdbc` (scope: runtime) | Khi cần |
-| MongoDB | `spring-boot-starter-data-mongodb` | NoSQL — Spring Data MongoDB (không phải JPA) |
-
-## Versions Mặc Định
-
-```xml
-<parent>
-    <groupId>org.springframework.boot</groupId>
-    <artifactId>spring-boot-starter-parent</artifactId>
-    <version><!-- latest stable, lấy từ start.spring.io --></version>
-<!-- </parent>
-
-<properties>
-    <java.version>21</java.version>
-</properties>
-```
-
-- **Java**: 21 (LTS)
-- **Spring Boot**: latest stable (parent POM quản lý version của tất cả dependency — không cần fix cứng version)
-- **Build tool**: Maven với Maven Wrapper (`./mvnw`) — không cần cài Maven global
-
-## Lombok (Optional — dùng thận trọng)
-
-Dùng để giảm boilerplate, nhưng học Java thuần trước:
-
-```xml
-<dependency>
-    <groupId>org.projectlombok</groupId>
-    <artifactId>lombok</artifactId>
-    <optional>true</optional>
-</dependency>
-```
-
-- **Dùng**: `@Getter`, `@Setter`, `@NoArgsConstructor`, `@AllArgsConstructor`, `@Builder`, `@Slf4j`
-- **TRÁNH `@Data` trên Entity**: gây vấn đề với JPA lazy loading và `equals`/`hashCode`
-- **Ưu tiên Records**: cho DTO thuần túy thay vì Lombok
-
-## Testing Stack
-
-| Loại test | Annotation | Scope |
-|-----------|-----------|-------|
-| Unit test (service) | `@ExtendWith(MockitoExtension.class)` | Mock dependencies |
-| Slice test (JPA) | `@DataJpaTest` | Chỉ load JPA layer |
-| Slice test (Web) | `@WebMvcTest(Controller.class)` | Chỉ load Web layer |
-| Integration test | `@SpringBootTest` | Load full context |
-| Integration + HTTP | `@SpringBootTest + TestRestTemplate` | Chạy server thật |
-
-## Không Dùng (trong learning project này)
-
-- **MapStruct / ModelMapper**: map DTO thủ công để học rõ hơn
-- **QueryDSL**: dùng JPQL `@Query` trước
-- **Spring WebFlux / Reactive**: học Servlet (blocking) trước  -->
+- H2 / in-memory DB — every test that needs a database uses the real docker-compose MySQL.
+- MapStruct / ModelMapper — DTOs map by hand (`from(entity)` static factories) so the mapping stays visible and debuggable.
+- Flyway / Liquibase — not yet added; `ddl-auto: update` is a known, tracked gap (see `docs/known-issues.md` and `README.md`'s roadmap), not an oversight to silently "fix" without discussing the migration plan first.

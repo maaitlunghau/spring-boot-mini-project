@@ -1,192 +1,37 @@
-<!-- # Architecture Rules — Spring Boot
+# Architecture — spring-boot-mini-project
 
-## Layered Architecture (Standard)
+## Module layout
 
-```
-HTTP Request
-    ↓
-@RestController      ← Nhận request, trả response, không có business logic
-    ↓
-@Service             ← Business logic, transaction management
-    ↓
-@Repository          ← Data access (Spring Data JPA / JdbcTemplate)
-    ↓
-Database
-```
-
-## Layer Responsibilities
-
-### Controller (`controller/`)
-
-- Annotate với `@RestController` + `@RequestMapping`
-- Chỉ nhận request, extract params, gọi Service, trả response — không có logic
-- Trả về `ResponseEntity<T>` hoặc DTO trực tiếp
-- **Constructor injection** — không dùng `@Autowired` field injection
-
-```java
-@RestController
-@RequestMapping("/api/users")
-public class UserController {
-    private final UserService userService;
-
-    public UserController(UserService userService) {
-        this.userService = userService;
-    }
-
-    @GetMapping("/{id}")
-    public ResponseEntity<UserDto> getUser(@PathVariable Long id) {
-        return ResponseEntity.ok(userService.findById(id));
-    }
-
-    @PostMapping
-    public ResponseEntity<UserDto> createUser(@Valid @RequestBody CreateUserRequest request) {
-        UserDto created = userService.create(request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(created);
-    }
-}
-```
-
-### Service (`service/`)
-
-- Annotate với `@Service`
-- Chứa toàn bộ business logic
-- Quản lý transaction: `@Transactional` ở class level, override method nếu cần
-- Throw custom exceptions khi không tìm thấy hoặc vi phạm business rule
-
-```java
-@Service
-@Transactional(readOnly = true)
-public class UserService {
-    private final UserRepository userRepository;
-
-    public UserService(UserRepository userRepository) {
-        this.userRepository = userRepository;
-    }
-
-    public UserDto findById(Long id) {
-        return userRepository.findById(id)
-            .map(UserDto::from)
-            .orElseThrow(() -> new ResourceNotFoundException("User", id));
-    }
-
-    @Transactional
-    public UserDto create(CreateUserRequest request) {
-        User user = new User(request.name(), request.email());
-        return UserDto.from(userRepository.save(user));
-    }
-}
-```
-
-### Repository (`repository/`)
-
-- Extend `JpaRepository<Entity, ID>` — Spring Data tự implement
-- Annotate `@Repository` optional (Spring Data tự detect)
-- Chỉ chứa data access — không có business logic
-- Custom queries dùng derived method names hoặc `@Query` JPQL
-
-```java
-public interface UserRepository extends JpaRepository<User, Long> {
-    Optional<User> findByEmail(String email);
-    List<User> findByActiveTrue();
-
-    @Query("SELECT u FROM User u WHERE u.name LIKE %:keyword%")
-    List<User> searchByName(@Param("keyword") String keyword);
-}
-```
-
-### Entity (`entity/` hoặc `domain/`)
-
-- Annotate với `@Entity` + `@Table(name = "users")`
-- `@Id` + `@GeneratedValue(strategy = GenerationType.IDENTITY)`
-- Tránh đặt logic phức tạp trong entity, giữ đơn giản
-- Không expose Entity ra ngoài API — dùng DTO
-
-```java
-@Entity
-@Table(name = "users")
-public class User {
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
-
-    @Column(nullable = false)
-    private String name;
-
-    @Column(nullable = false, unique = true)
-    private String email;
-
-    // constructors, getters, setters
-}
-```
-
-### DTO (`dto/`)
-
-- Plain Java objects (hoặc Records) — không có JPA annotation
-- Dùng Java Records cho DTO đơn giản (immutable, boilerplate-free)
-- Static factory method `from(Entity)` để convert
-
-```java
-public record UserDto(Long id, String name, String email) {
-    public static UserDto from(User user) {
-        return new UserDto(user.getId(), user.getName(), user.getEmail());
-    }
-}
-
-public record CreateUserRequest(
-    @NotBlank String name,
-    @Email @NotBlank String email
-) {}
-```
-
-## Exception Handling
-
-Custom exception hierarchy:
-
-```java
-// Base
-public class AppException extends RuntimeException {
-    public AppException(String message) { super(message); }
-}
-
-// Specific
-public class ResourceNotFoundException extends AppException {
-    public ResourceNotFoundException(String resource, Object id) {
-        super(resource + " not found with id: " + id);
-    }
-}
-```
-
-Global handler với `@RestControllerAdvice`:
-
-```java
-@RestControllerAdvice
-public class GlobalExceptionHandler {
-    @ExceptionHandler(ResourceNotFoundException.class)
-    public ResponseEntity<ErrorResponse> handleNotFound(ResourceNotFoundException ex) {
-        return ResponseEntity.status(HttpStatus.NOT_FOUND)
-            .body(new ErrorResponse(404, ex.getMessage()));
-    }
-
-    @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ErrorResponse> handleValidation(MethodArgumentNotValidException ex) {
-        String message = ex.getBindingResult().getFieldErrors().stream()
-            .map(e -> e.getField() + ": " + e.getDefaultMessage())
-            .collect(Collectors.joining(", "));
-        return ResponseEntity.badRequest().body(new ErrorResponse(400, message));
-    }
-}
-```
-
-## Package Structure (per sub-project)
+Feature-first, not layer-first, at the top level. Each domain gets its own module under `src/main/java/com/maaitlunghau/spring_boot_mini_project/module/<domain>/`, and *within* that module the standard Spring layers apply:
 
 ```
-src/main/java/com/example/[topic]/
-├── [TopicApplication].java     ← Main class
-├── controller/
-├── service/
-├── repository/
-├── entity/                     (hoặc domain/ hoặc model/)
-├── dto/
-├── exception/
-└── config/
-``` -->
+module/<domain>/
+├── controller/v1/     ← @RestController, versioned (v1/, v2/, ... only when a breaking change needs it)
+├── service/           ← interface
+│   └── impl/          ← implementation (<Name>ServiceImpl)
+├── repository/        ← extends JpaRepository
+├── entity/
+└── dto/
+    ├── request/
+    └── response/
+```
+
+Cross-cutting code that isn't domain-specific lives at the top level instead: `common/` (shared DTOs like `ApiResponse`/`PageResponse`, `BaseEntity`), `config/` (Spring config + the security filter chain), `exception/` (the `AppException` hierarchy + `GlobalExceptionHandler`), `security/` (JWT + `UserDetailsService`), `util/`.
+
+Existing modules: `module/auth/` (login/refresh/logout, refresh-token rotation with reuse detection), `module/user/` (user CRUD + role management). A new domain follows the same shape — `module/user/` is the simpler reference example.
+
+## Layer responsibilities
+
+- **Controller**: extract request data, call the service, shape the response. No business logic. Constructor injection only — never `@Autowired` field injection (every existing controller follows this).
+- **Service interface + impl**: business logic lives in the `*Impl`. Every service in this codebase currently has exactly one implementation — don't add a second interface+impl split for a new service unless you actually expect (or already have) more than one; a single concrete `@Service` class is fine and simpler.
+- **Repository**: `extends JpaRepository<Entity, Id>`. Derived query methods first; `@Query` (JPQL) when a derived name would be unreadable; native SQL only when JPQL genuinely can't express it.
+- **Entity**: `@Entity`, extends `common/entity/BaseEntity.java` (gives every entity `id`/`createdAt`/`updatedAt`/`version` for free — optimistic locking via `@Version`). Lombok `@Getter`, a protected no-arg constructor for JPA, a public constructor for the fields that matter at creation. Mutation goes through named domain methods (`user.changeRole(...)`, `token.revoke(...)`) — not raw setters.
+- **DTO**: Java records, request/response split into their own subpackages. Bean Validation on request records; a static `from(Entity)` factory on response records when the response isn't a 1:1 mirror.
+
+## Exception handling
+
+`exception/AppException` (extends `RuntimeException`) is the base of every domain exception (`ResourceNotFoundException`, `DuplicateResourceException`, `BadRequestException`, `InvalidRefreshTokenException`, `RefreshTokenReuseException`, ...). `exception/GlobalExceptionHandler` (`@RestControllerAdvice`) maps each to its HTTP status via `common/dto/ApiResponse`. A new failure mode gets a new `AppException` subclass plus a handler entry — never a raw `throw new RuntimeException(...)` from a service, and never a bare try/catch in a controller that should instead let the global handler map it.
+
+## Concrete code templates
+
+See `backend-patterns.md` for copy-pasteable controller/service/repository/entity/DTO snippets in this project's actual style — not duplicated here.

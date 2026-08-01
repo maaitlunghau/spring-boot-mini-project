@@ -1,271 +1,120 @@
-<!-- # Spring Boot Patterns — Code Templates
+# Code Templates — spring-boot-mini-project
 
-## REST Controller Template
+Copy-paste starting points matching this project's actual style. See `architecture.md` for why each layer looks the way it does.
+
+## Controller
 
 ```java
 @RestController
-@RequestMapping("/api/users")
-public class UserController {
-    private final UserService userService;
+@RequestMapping("/api/v1/<domain>")
+public class <Domain>Controller {
 
-    public UserController(UserService userService) {
-        this.userService = userService;
-    }
+    private final <Domain>Service <domain>Service;
 
-    @GetMapping
-    public ResponseEntity<List<UserDto>> getAll() {
-        return ResponseEntity.ok(userService.findAll());
+    public <Domain>Controller(<Domain>Service <domain>Service) {
+        this.<domain>Service = <domain>Service;
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<UserDto> getById(@PathVariable Long id) {
-        return ResponseEntity.ok(userService.findById(id));
+    public ResponseEntity<ApiResponse<<Domain>Response>> getById(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.ok(<domain>Service.getById(id)));
     }
 
     @PostMapping
-    public ResponseEntity<UserDto> create(@Valid @RequestBody CreateUserRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(userService.create(request));
-    }
-
-    @PutMapping("/{id}")
-    public ResponseEntity<UserDto> update(@PathVariable Long id,
-                                          @Valid @RequestBody UpdateUserRequest request) {
-        return ResponseEntity.ok(userService.update(id, request));
-    }
-
-    @DeleteMapping("/{id}")
-    public ResponseEntity<Void> delete(@PathVariable Long id) {
-        userService.delete(id);
-        return ResponseEntity.noContent().build();
+    public ResponseEntity<ApiResponse<<Domain>Response>> create(@Valid @RequestBody Create<Domain>Request request) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+            .body(ApiResponse.of(201, "Created", <domain>Service.create(request)));
     }
 }
 ```
 
-## Service Template
+## Service (interface + impl only if you genuinely expect more than one implementation)
+
+```java
+public interface <Domain>Service {
+    <Domain>Response getById(Long id);
+    <Domain>Response create(Create<Domain>Request request);
+}
+```
 
 ```java
 @Service
 @Transactional(readOnly = true)
-public class UserService {
-    private final UserRepository userRepository;
+public class <Domain>ServiceImpl implements <Domain>Service {
 
-    public UserService(UserRepository userRepository) {
-        this.userRepository = userRepository;
+    private final <Domain>Repository repository;
+
+    public <Domain>ServiceImpl(<Domain>Repository repository) {
+        this.repository = repository;
     }
 
-    public List<UserDto> findAll() {
-        return userRepository.findAll().stream()
-            .map(UserDto::from)
-            .toList();
+    @Override
+    public <Domain>Response getById(Long id) {
+        return <Domain>Response.from(findOrThrow(id));
     }
 
-    public UserDto findById(Long id) {
-        return userRepository.findById(id)
-            .map(UserDto::from)
-            .orElseThrow(() -> new ResourceNotFoundException("User", id));
+    @Override
+    @Transactional  // override: this one writes, so it can't stay read-only
+    public <Domain>Response create(Create<Domain>Request request) {
+        <Domain> entity = new <Domain>(request.name());
+        return <Domain>Response.from(repository.save(entity));
     }
 
-    @Transactional
-    public UserDto create(CreateUserRequest request) {
-        if (userRepository.existsByEmail(request.email())) {
-            throw new DuplicateResourceException("Email already exists: " + request.email());
-        }
-        User user = new User(request.name(), request.email());
-        return UserDto.from(userRepository.save(user));
-    }
-
-    @Transactional
-    public UserDto update(Long id, UpdateUserRequest request) {
-        User user = userRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException("User", id));
-        user.update(request.name());
-        return UserDto.from(user);  // no need to call save() — @Transactional handles dirty checking
-    }
-
-    @Transactional
-    public void delete(Long id) {
-        if (!userRepository.existsById(id)) {
-            throw new ResourceNotFoundException("User", id);
-        }
-        userRepository.deleteById(id);
+    private <Domain> findOrThrow(Long id) {
+        return repository.findById(id)
+            .orElseThrow(() -> new ResourceNotFoundException("<Domain>", id));
     }
 }
 ```
 
-## Repository Template
+**Transactional gotcha, learned the hard way** (see the fixed-bugs section of `docs/known-issues.md`): a class-level `@Transactional(readOnly = true)` is inherited by every method that doesn't explicitly override it — including ones that write. With MySQL Connector/J's default `readOnlyPropagatesToServer`, that isn't just a lint smell: the database itself rejects the write. Every method that writes needs its own bare `@Transactional`. And if a method must commit *independently* of its caller's transaction (e.g. "revoke everything, then throw" — the revoke has to survive the throw), self-invocation bypasses the proxy: inject the service into itself via a `@Lazy @Autowired` field and call through that reference, with `@Transactional(propagation = Propagation.REQUIRES_NEW)` on the target method — see `RefreshTokenServiceImpl` for the real, working example.
+
+## Repository
 
 ```java
-public interface UserRepository extends JpaRepository<User, Long> {
-    // Derived method — Spring Data tự generate query
-    Optional<User> findByEmail(String email);
+public interface <Domain>Repository extends JpaRepository<<Domain>, Long> {
+    Optional<<Domain>> findByEmail(String email);
     boolean existsByEmail(String email);
-    List<User> findByActiveTrue();
-
-    // JPQL query
-    @Query("SELECT u FROM User u WHERE u.name LIKE %:keyword%")
-    List<User> searchByName(@Param("keyword") String keyword);
-
-    // Native SQL (khi JPQL không đủ)
-    @Query(value = "SELECT * FROM users WHERE created_at > :date", nativeQuery = true)
-    List<User> findCreatedAfter(@Param("date") LocalDateTime date);
 }
 ```
 
-## Entity Template
+## Entity
 
 ```java
 @Entity
-@Table(name = "users")
-public class User {
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
-
-    @Column(nullable = false, length = 100)
-    private String name;
-
-    @Column(nullable = false, unique = true, length = 255)
-    private String email;
+@Getter
+@Table(name = "<domains>")
+public class <Domain> extends BaseEntity {
 
     @Column(nullable = false)
-    private boolean active = true;
+    private String name;
 
-    @CreationTimestamp
-    @Column(updatable = false)
-    private LocalDateTime createdAt;
+    protected <Domain>() {}
 
-    @UpdateTimestamp
-    private LocalDateTime updatedAt;
-
-    protected User() {} // JPA requires no-arg constructor
-
-    public User(String name, String email) {
-        this.name = name;
-        this.email = email;
-    }
-
-    public void update(String name) {
+    public <Domain>(String name) {
         this.name = name;
     }
 
-    // Getters only — no setters (encapsulation via domain methods)
-    public Long getId() { return id; }
-    public String getName() { return name; }
-    public String getEmail() { return email; }
-    public boolean isActive() { return active; }
+    public void rename(String name) {
+        this.name = name;
+    }
 }
 ```
 
-## DTO Template (Java Records)
+## DTO (records)
 
 ```java
-// Response DTO
-public record UserDto(Long id, String name, String email, boolean active) {
-    public static UserDto from(User user) {
-        return new UserDto(user.getId(), user.getName(), user.getEmail(), user.isActive());
-    }
-}
-
-// Request DTOs with Bean Validation
-public record CreateUserRequest(
-    @NotBlank(message = "Name is required") String name,
-    @Email(message = "Invalid email format")
-    @NotBlank(message = "Email is required") String email
+public record Create<Domain>Request(
+    @NotBlank(message = "Name is required.") String name
 ) {}
 
-public record UpdateUserRequest(
-    @NotBlank(message = "Name is required") String name
-) {}
-```
-
-## Exception Pattern
-
-```java
-// Custom exceptions
-public class ResourceNotFoundException extends RuntimeException {
-    public ResourceNotFoundException(String resource, Object id) {
-        super(resource + " not found with id: " + id);
-    }
-}
-
-public class DuplicateResourceException extends RuntimeException {
-    public DuplicateResourceException(String message) {
-        super(message);
-    }
-}
-
-// Error response shape
-public record ErrorResponse(int status, String message, LocalDateTime timestamp) {
-    public ErrorResponse(int status, String message) {
-        this(status, message, LocalDateTime.now());
-    }
-}
-
-// Global handler
-@RestControllerAdvice
-public class GlobalExceptionHandler {
-    @ExceptionHandler(ResourceNotFoundException.class)
-    public ResponseEntity<ErrorResponse> handleNotFound(ResourceNotFoundException ex) {
-        return ResponseEntity.status(HttpStatus.NOT_FOUND)
-            .body(new ErrorResponse(404, ex.getMessage()));
-    }
-
-    @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ErrorResponse> handleValidation(MethodArgumentNotValidException ex) {
-        String errors = ex.getBindingResult().getFieldErrors().stream()
-            .map(e -> e.getField() + ": " + e.getDefaultMessage())
-            .collect(Collectors.joining("; "));
-        return ResponseEntity.badRequest().body(new ErrorResponse(400, errors));
-    }
-
-    @ExceptionHandler(Exception.class)
-    public ResponseEntity<ErrorResponse> handleGeneral(Exception ex) {
-        return ResponseEntity.internalServerError()
-            .body(new ErrorResponse(500, "Internal server error"));
+public record <Domain>Response(Long id, String name) {
+    public static <Domain>Response from(<Domain> entity) {
+        return new <Domain>Response(entity.getId(), entity.getName());
     }
 }
 ```
 
-## Bean Validation Annotations
+## Testing
 
-```java
-@NotNull       // không null (mọi type)
-@NotBlank      // không null, không blank (String)
-@NotEmpty      // không null, không rỗng (String, Collection)
-@Size(min, max) // độ dài String hoặc kích thước Collection
-@Min(value)    // số >= value
-@Max(value)    // số <= value
-@Email         // định dạng email hợp lệ
-@Pattern(regexp) // khớp regex
-@Positive      // số > 0
-@PositiveOrZero // số >= 0
-@Future        // date trong tương lai
-@Past          // date trong quá khứ
-```
-
-## Spring Security — JWT Config Skeleton
-
-```java
-@Configuration
-@EnableWebSecurity
-public class SecurityConfig {
-    @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-        return http
-            .csrf(AbstractHttpConfigurer::disable)
-            .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/api/auth/**").permitAll()
-                .requestMatchers("/h2-console/**").permitAll()
-                .anyRequest().authenticated()
-            )
-            .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
-            .build();
-    }
-
-    @Bean
-    public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
-    }
-}
-``` -->
+Real `@SpringBootTest` against the actual docker-compose MySQL/Redis (`docker compose up -d` first) — this project doesn't use H2 or mocked repositories for anything that needs to prove real DB/transaction behavior (the transaction-propagation bugs in `docs/known-issues.md` would have slipped straight past a mock). Plain Mockito unit tests are for pure logic that doesn't depend on a real transaction or lock (e.g. branch-ordering checks) — see `RefreshTokenServiceImplTest` (unit) next to `RefreshTokenServiceImplIntegrationTest` (integration) for both styles side by side.
