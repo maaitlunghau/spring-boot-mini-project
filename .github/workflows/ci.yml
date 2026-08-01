@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: ci_test_password
+          MYSQL_DATABASE: spring-boot-mini-project
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -uroot -pci_test_password"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      MYSQL_HOST: localhost
+      DB_USERNAME: root
+      DB_PASSWORD: ci_test_password
+      REDIS_HOST: localhost
+      JWT_SECRET: gMfIEwP2VOBiMJSxg16nbnS4sarzaXCr8DnDonKX1nBQwDXrvg05tuU4cdh6SIUGX/xFfzR4loUkiUbJIrzd9A==
+      FRONTEND_URL: http://localhost:5173
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Run tests
+        run: ./mvnw -B test
+
+      - name: Build Docker image
+        run: docker build -t spring-boot-mini-project:ci .
