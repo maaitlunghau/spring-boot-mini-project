@@ -6,12 +6,12 @@ public final class RequestUtils {
 
     private RequestUtils() {};
 
+    /**
+     * This app has no reverse proxy in front of it, so X-Forwarded-For is
+     * attacker-controlled and must not be trusted for rate limiting or
+     * auditing. Always use the actual TCP peer address.
+     */
     public static String clientIp(HttpServletRequest request) {
-        String forwarded = request.getHeader("X-Forwarded-For");
-        if (forwarded != null && !forwarded.isBlank()) {
-            return forwarded.split(",")[0].trim();
-        }
-
         return request.getRemoteAddr();
     }
 
