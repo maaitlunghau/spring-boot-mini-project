@@ -1,0 +1,18 @@
+name: CD
+
+# Placeholder — no deployment target (VPS/K8s) exists yet for this project.
+# When one exists, wire up:
+#   1. Build & tag the Docker image (see ../../Dockerfile)
+#   2. Push to a registry (Docker Hub / GHCR)
+#   3. Deploy to the target (e.g. SSH + `docker compose pull && up -d`, or `kubectl apply`)
+# Until then this workflow intentionally does nothing and only runs manually.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  placeholder:
+    runs-on: ubuntu-latest
+    steps:
+      - name: No-op
+        run: echo "CD not implemented yet - see comment header in this file."
