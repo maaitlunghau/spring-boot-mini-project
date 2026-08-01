@@ -110,12 +110,10 @@ single shared "resolve token from cookie-or-header" helper (e.g. in
 - CSRF is disabled (`ignoringRequestMatchers`) for `/api/v1/auth/logout` and
   `/api/v1/auth/refresh`. Real gap, but largely mitigated in practice by
   `SameSite=Lax` on the auth cookies.
-- `/swagger-ui/**` and `/v3/api-docs/**` are `permitAll()` with no profile
-  gating — currently harmless since `springdoc-openapi` isn't even on the
-  classpath yet (404 today), but will become a real exposure the moment
-  that dependency is added without revisiting `SecurityConfig`.
-- Entire `UserService`/`UserController` has no consumer wired up anywhere
-  yet (dead code until a real caller exists).
+- `/swagger-ui/**` and `/v3/api-docs/**` are `permitAll()`. `springdoc-openapi`
+  was added and the docs are now live and public at `/swagger-ui/index.html` —
+  this is an intentional choice (confirmed with the project owner), not an
+  oversight. Revisit `SecurityConfig` if the docs should ever be restricted.
 - JWT is parsed/verified 2–4 times per request in `JwtAuthenticationFilter`
   and `AuthServiceImpl.logout()` instead of once and reused.
 - `AuthService`/`RefreshTokenService`/`UserService`/`TokenBlacklistService`
