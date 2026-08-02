@@ -9,12 +9,13 @@
 
 A Spring Boot backend built as a hands-on exercise in production-grade practices: externalized configuration, containerized local infrastructure, and a real CI pipeline — not just a "hello world" starter.
 
-> **Status:** early stage. Application skeleton, infrastructure, and CI/CD are in place; domain features (auth, entities, endpoints) are actively being built. See [Roadmap](#roadmap).
+> **Status:** infrastructure (Docker, CI, secrets) and the Auth + User modules are done, code-reviewed, and hardened via TDD. Blog, Like/Comment, and Notification are planned next, one at a time. See [Modules & Features](#modules--features) and [Roadmap](#roadmap).
 
 ---
 
 ## Table of Contents
 
+- [Modules & Features](#modules--features)
 - [Tech Stack](#tech-stack)
 - [Prerequisites](#prerequisites)
 - [Getting Started](#getting-started)
@@ -28,6 +29,52 @@ A Spring Boot backend built as a hands-on exercise in production-grade practices
 - [Roadmap](#roadmap)
 
 ---
+
+## Modules & Features
+
+This is a learning project for practicing Spring Data JPA and Spring Security end to end — deliberately a small, self-contained domain (auth + a tiny social-blog shape) rather than a large feature set. Modules are built and hardened one at a time, in the order below. Detailed specs (entities, ERD, business rules) for each planned module will be written up separately as it's picked up — this section is a status/roadmap overview, not the full design.
+
+Status legend: ✅ Done &nbsp;·&nbsp; 🚧 Planned
+
+### Authentication & Authorization (JWT)
+
+| Feature | Status | Endpoint |
+| --- | --- | --- |
+| Register | ✅ | `POST /api/v1/auth/register` |
+| Login | ✅ | `POST /api/v1/auth/login` (access + refresh token, httpOnly cookies) |
+| Refresh token | ✅ | `POST /api/v1/auth/refresh` (rotation + theft/reuse detection) |
+| Logout | ✅ | `POST /api/v1/auth/logout` |
+| Session management | ✅ | `GET /api/v1/auth/sessions`, `DELETE /api/v1/auth/sessions/{sessionId}` (list/revoke active devices) |
+| Profile | ✅ | `GET /api/v1/users/me`, `PATCH /api/v1/users/{id}/profile` — lives on the User module's controller, not a separate `/auth/profile` route |
+| Forgot / reset password | 🚧 | — |
+| Social login (OAuth2 / Auth0) | 🚧 | — |
+
+### User
+
+| Feature | Status | Endpoint |
+| --- | --- | --- |
+| Create user (admin) | ✅ | `POST /api/v1/users` |
+| List / search users, paginated (admin) | ✅ | `GET /api/v1/users` |
+| Get user by id (admin) | ✅ | `GET /api/v1/users/{id}` |
+| Update profile (self or admin) | ✅ | `PATCH /api/v1/users/{id}/profile` |
+| Update role (admin) | ✅ | `PUT /api/v1/users/{id}/role` |
+| Delete user (admin) | ✅ | `DELETE /api/v1/users/{id}` |
+
+### Blog 🚧
+
+Basic CRUD: create post, list posts, get post by id, update post, delete post.
+
+### Like, Comment 🚧
+
+Basic CRUD on both, scoped to a blog post.
+
+### Notification 🚧
+
+Queue-based processing, delivered realtime.
+
+---
+
+Known bugs and hardening work on the modules already built are tracked separately in [`docs/known-issues.md`](docs/known-issues.md), not duplicated here.
 
 ## Tech Stack
 
@@ -212,24 +259,36 @@ The image runs as a non-root user on `eclipse-temurin:21-jre-alpine`.
 
 ## Project Structure
 
+Feature-first: each domain gets its own module under `module/`, with the usual Spring layers inside it. Cross-cutting code lives at the top level.
+
 ```
 spring-boot-mini-project/
 ├── src/
-│   ├── main/
-│   │   ├── java/com/maaitlunghau/spring_boot_mini_project/
-│   │   │   └── SpringBootMiniProjectApplication.java
-│   │   └── resources/
-│   │       └── application.yml
-│   └── test/
-│       └── java/com/maaitlunghau/spring_boot_mini_project/
-│           └── SpringBootMiniProjectApplicationTests.java
-├── .github/workflows/       # CI and CD pipelines
-├── docs/superpowers/        # design specs & implementation plans for this project
-├── Dockerfile                # multi-stage production image for the app
-├── docker-compose.yml        # local dev infra: MySQL, Redis, phpMyAdmin
-├── run-dev.sh                 # loads .env and starts the app in one command
-├── .envrc                     # direnv config (auto-loads .env on cd)
-├── .env.example               # template for required environment variables
+│   ├── main/java/com/maaitlunghau/spring_boot_mini_project/
+│   │   ├── module/
+│   │   │   ├── auth/          # login/refresh/logout, session management
+│   │   │   │   ├── controller/v1/  service/impl/  repository/  entity/  dto/{request,response}/
+│   │   │   └── user/          # user CRUD, roles, profile
+│   │   │       └── controller/v1/  service/impl/  repository/  entity/  dto/{request,response}/
+│   │   ├── common/            # ApiResponse, PageResponse, BaseEntity
+│   │   ├── config/            # SecurityConfig, JwtAuthenticationFilter, CORS/CSRF, OpenAPI
+│   │   ├── exception/         # AppException hierarchy + GlobalExceptionHandler
+│   │   ├── security/          # JwtService, UserDetailsServiceImpl
+│   │   ├── filter/            # RateLimitFilter
+│   │   ├── scheduler/         # CleanupScheduledTask (expired refresh tokens)
+│   │   ├── util/              # CookieUtils, RequestUtils, DateUtils
+│   │   └── SpringBootMiniProjectApplication.java
+│   ├── main/resources/application.yml
+│   └── test/java/...          # unit tests (Mockito) + integration tests (@SpringBootTest, real MySQL/Redis)
+├── .github/workflows/         # CI and CD pipelines
+├── docs/
+│   ├── known-issues.md        # tracked bugs — fixed vs. open, with root cause
+│   └── superpowers/           # design specs & implementation plans for past work
+├── Dockerfile                  # multi-stage production image for the app
+├── docker-compose.yml          # local dev infra: MySQL, Redis, phpMyAdmin
+├── run-dev.sh                   # loads .env and starts the app in one command
+├── .envrc                       # direnv config (auto-loads .env on cd)
+├── .env.example                 # template for required environment variables
 └── pom.xml
 ```
 
@@ -250,10 +309,19 @@ git commit -m "feat(auth): add jwt refresh token endpoint"
 
 ## Roadmap
 
-- [ ] Spring Security configuration + JWT authentication filter
-- [ ] User entity, repository, and registration/login endpoints
-- [ ] Global exception handling (`@ControllerAdvice`)
+Feature work (see [Modules & Features](#modules--features) for detail):
+
+- [ ] Forgot / reset password
+- [ ] Social login (OAuth2 / Auth0)
+- [ ] Blog module (CRUD)
+- [ ] Like & Comment modules
+- [ ] Notification module (queue + realtime)
+
+Hardening / infra:
+
+- [ ] Fix remaining known issues #5–#10 — see [`docs/known-issues.md`](docs/known-issues.md)
 - [ ] `spring-boot-starter-actuator` for health checks and metrics
-- [ ] API documentation (OpenAPI/Swagger)
 - [ ] Database migrations (Flyway/Liquibase) instead of `ddl-auto: update`
 - [ ] Real CD pipeline once a deployment target is chosen
+
+Already done: Spring Security + JWT auth, user CRUD/roles, global exception handling, OpenAPI/Swagger docs.
