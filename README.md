@@ -32,49 +32,60 @@ A Spring Boot backend built as a hands-on exercise in production-grade practices
 
 ## Modules & Features
 
-This is a learning project for practicing Spring Data JPA and Spring Security end to end — deliberately a small, self-contained domain (auth + a tiny social-blog shape) rather than a large feature set. Modules are built and hardened one at a time, in the order below. Detailed specs (entities, ERD, business rules) for each planned module will be written up separately as it's picked up — this section is a status/roadmap overview, not the full design.
+This project is a deliberately small, self-contained domain (auth + a tiny social-blog shape) built to practice **Spring Data JPA** and **Spring Security** in depth rather than breadth — every module is taken through real design decisions, code review, and TDD instead of being scaffolded and left alone. Modules are built one at a time, in the order listed below; each gets its own design spec (entities, ERD, business rules) under [`docs/superpowers/specs/`](docs/superpowers/specs/) when its turn comes, and known defects are tracked with root cause in [`docs/known-issues.md`](docs/known-issues.md) rather than duplicated in this table.
 
-Status legend: ✅ Done &nbsp;·&nbsp; 🚧 Planned
+| # | Module | Status |
+| - | ------ | :----: |
+| 1 | [Authentication & Authorization](#1-authentication--authorization) | ✅ Done |
+| 2 | [User Management](#2-user-management) | ✅ Done |
+| 3 | [Blog](#3-blog) | 🚧 Planned |
+| 4 | [Like & Comment](#4-like--comment) | 🚧 Planned |
+| 5 | [Notification](#5-notification) | 🚧 Planned |
 
-### Authentication & Authorization (JWT)
+### 1. Authentication & Authorization
 
-| Feature | Status | Endpoint |
+Stateless JWT auth: a short-lived **access token** (5 min) authorizes requests, a long-lived opaque **refresh token** (7-day sliding window, 30-day absolute cap) issues new access tokens without forcing a re-login. Both are delivered as `httpOnly` cookies by default (a `Bearer` header also works — see `JwtAuthenticationFilter`). Refresh tokens **rotate on every use**: the old token is invalidated the moment a new one is issued, and replaying an already-rotated token is treated as theft — it triggers `RefreshTokenReuseException` and revokes every active session for that user, not just the one that leaked. Login/register/refresh are additionally rate-limited (5 attempts / 60s per client) to blunt credential-stuffing and brute force.
+
+| Feature | Endpoint | Notes |
 | --- | --- | --- |
-| Register | ✅ | `POST /api/v1/auth/register` |
-| Login | ✅ | `POST /api/v1/auth/login` (access + refresh token, httpOnly cookies) |
-| Refresh token | ✅ | `POST /api/v1/auth/refresh` (rotation + theft/reuse detection) |
-| Logout | ✅ | `POST /api/v1/auth/logout` |
-| Session management | ✅ | `GET /api/v1/auth/sessions`, `DELETE /api/v1/auth/sessions/{sessionId}` (list/revoke active devices) |
-| Profile | ✅ | `GET /api/v1/users/me`, `PATCH /api/v1/users/{id}/profile` — lives on the User module's controller, not a separate `/auth/profile` route |
-| Forgot / reset password | 🚧 | — |
-| Social login (OAuth2 / Auth0) | 🚧 | — |
+| Register | `POST /api/v1/auth/register` | Email uniqueness enforced at the DB level |
+| Login | `POST /api/v1/auth/login` | Issues access + refresh token as `httpOnly` cookies |
+| Refresh token | `POST /api/v1/auth/refresh` | Rotates the refresh token; detects and responds to reuse/theft |
+| Logout | `POST /api/v1/auth/logout` | Blacklists the current access token (Redis) + revokes its session |
+| List active sessions | `GET /api/v1/auth/sessions` | One entry per device/refresh-token currently valid |
+| Revoke a session | `DELETE /api/v1/auth/sessions/{sessionId}` | Remote "sign out this device" |
+| View / update profile | `GET /api/v1/users/me`, `PATCH /api/v1/users/{id}/profile` | Served from the User module's controller, not a separate `/auth/profile` route |
+| Forgot / reset password | — | 🚧 planned |
+| Social login (OAuth2 / Auth0) | — | 🚧 planned |
 
-### User
+Authorization is role-based (`ADMIN` / `USER`) via Spring Security method security (`@PreAuthorize`), enforced per-endpoint in the User module below.
 
-| Feature | Status | Endpoint |
+### 2. User Management
+
+Full administrative CRUD over accounts, plus self-service profile editing, sitting behind role checks rather than a single blanket rule — a regular user can only ever read/update their own record, an admin can manage everyone's.
+
+| Feature | Endpoint | Access |
 | --- | --- | --- |
-| Create user (admin) | ✅ | `POST /api/v1/users` |
-| List / search users, paginated (admin) | ✅ | `GET /api/v1/users` |
-| Get user by id (admin) | ✅ | `GET /api/v1/users/{id}` |
-| Update profile (self or admin) | ✅ | `PATCH /api/v1/users/{id}/profile` |
-| Update role (admin) | ✅ | `PUT /api/v1/users/{id}/role` |
-| Delete user (admin) | ✅ | `DELETE /api/v1/users/{id}` |
+| Create user | `POST /api/v1/users` | Admin only |
+| List / search users (paginated, filter by role or keyword) | `GET /api/v1/users` | Admin only |
+| Get user by id | `GET /api/v1/users/{id}` | Admin only |
+| Update profile | `PATCH /api/v1/users/{id}/profile` | Self or admin |
+| Change role | `PUT /api/v1/users/{id}/role` | Admin only |
+| Delete user | `DELETE /api/v1/users/{id}` | Admin only |
 
-### Blog 🚧
+Search/filtering is built on Spring Data JPA Specifications (`UserSpecifications`) rather than a growing pile of derived-query methods, so new filter criteria compose instead of multiplying methods.
 
-Basic CRUD: create post, list posts, get post by id, update post, delete post.
+### 3. Blog
 
-### Like, Comment 🚧
+🚧 **Planned.** Standard content CRUD — create, list (paginated), get by id, update, delete — owned by the authenticated user who authored it. Intended to be the first module built on top of the JPA relationship patterns (`User` 1—N `Post`) that Like/Comment will then extend.
 
-Basic CRUD on both, scoped to a blog post.
+### 4. Like & Comment
 
-### Notification 🚧
+🚧 **Planned.** CRUD scoped to a blog post: one like per user per post (uniqueness constraint, not just application-level checking), threaded or flat comments TBD at spec time. Exercises JPA associations and cascade/orphan-removal semantics beyond the single-entity modules built so far.
 
-Queue-based processing, delivered realtime.
+### 5. Notification
 
----
-
-Known bugs and hardening work on the modules already built are tracked separately in [`docs/known-issues.md`](docs/known-issues.md), not duplicated here.
+🚧 **Planned.** Fan-out notifications (e.g. "someone liked/commented on your post") processed asynchronously through a **queue** rather than inline in the request path, delivered to connected clients **in real time**. Concrete transport (Redis Streams/pub-sub vs. a dedicated broker, WebSocket vs. SSE) is a decision for that module's design spec, not fixed yet.
 
 ## Tech Stack
 
