@@ -1,0 +1,15 @@
+--------------------------------------------------------------------
+NOTES 
+--------------------------------------------------------------------
+
+------------------------------------------------
+Rulesets (Github Workflow - CI)
+------------------------------------------------
+- Status check này — JWT_SECRET đang hardcode thẳng trong file YAML, commit vào repo. 
+- Dù chỉ dùng cho CI test, đây vẫn là thói quen xấu cần sửa ngay:
+
+- Nếu repo public, secret này lộ vĩnh viễn trong git history dù sau này có xóa khỏi file.
+- Nên chuyển qua GitHub Actions Secrets (Settings → Secrets and variables → Actions), dù giá trị chỉ dùng cho test, để giữ convention: secret luôn qua secret store, không bao giờ hardcode, kể cả giá trị "vô hại".
+- Cách sửa: tạo secret JWT_SECRET_CI trong repo settings, rồi trong workflow đổi thành JWT_SECRET: ${{ secrets.JWT_SECRET_CI }}.
+
+- DB_PASSWORD/MYSQL_ROOT_PASSWORD là ci_test_password thì không sao vì chỉ tồn tại trong container ephemeral của job, không phải bí mật thật.
