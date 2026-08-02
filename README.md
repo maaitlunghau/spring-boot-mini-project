@@ -36,11 +36,11 @@ This project is a deliberately small, self-contained domain (auth + a tiny socia
 
 | # | Module | Status |
 | - | ------ | :----: |
-| 1 | [Authentication & Authorization](#1-authentication--authorization) | ✅ Done |
-| 2 | [User Management](#2-user-management) | ✅ Done |
-| 3 | [Blog](#3-blog) | 🚧 Planned |
-| 4 | [Like & Comment](#4-like--comment) | 🚧 Planned |
-| 5 | [Notification](#5-notification) | 🚧 Planned |
+| 1 | [Authentication & Authorization](#1-authentication--authorization) | Done |
+| 2 | [User Management](#2-user-management) | Done |
+| 3 | [Blog](#3-blog) | Planned |
+| 4 | [Like & Comment](#4-like--comment) | Planned |
+| 5 | [Notification](#5-notification) | Planned |
 
 ### 1. Authentication & Authorization
 
@@ -55,8 +55,8 @@ Stateless JWT auth: a short-lived **access token** (5 min) authorizes requests, 
 | List active sessions | `GET /api/v1/auth/sessions` | One entry per device/refresh-token currently valid |
 | Revoke a session | `DELETE /api/v1/auth/sessions/{sessionId}` | Remote "sign out this device" |
 | View / update profile | `GET /api/v1/users/me`, `PATCH /api/v1/users/{id}/profile` | Served from the User module's controller, not a separate `/auth/profile` route |
-| Forgot / reset password | — | 🚧 planned |
-| Social login (OAuth2 / Auth0) | — | 🚧 planned |
+| Forgot / reset password | — | planned |
+| Social login (OAuth2 / Auth0) | — | planned |
 
 Authorization is role-based (`ADMIN` / `USER`) via Spring Security method security (`@PreAuthorize`), enforced per-endpoint in the User module below.
 
@@ -77,15 +77,15 @@ Search/filtering is built on Spring Data JPA Specifications (`UserSpecifications
 
 ### 3. Blog
 
-🚧 **Planned.** Standard content CRUD — create, list (paginated), get by id, update, delete — owned by the authenticated user who authored it. Intended to be the first module built on top of the JPA relationship patterns (`User` 1—N `Post`) that Like/Comment will then extend.
+**Planned.** Standard content CRUD — create, list (paginated), get by id, update, delete — owned by the authenticated user who authored it. Intended to be the first module built on top of the JPA relationship patterns (`User` 1—N `Post`) that Like/Comment will then extend.
 
 ### 4. Like & Comment
 
-🚧 **Planned.** CRUD scoped to a blog post: one like per user per post (uniqueness constraint, not just application-level checking), threaded or flat comments TBD at spec time. Exercises JPA associations and cascade/orphan-removal semantics beyond the single-entity modules built so far.
+**Planned.** CRUD scoped to a blog post: one like per user per post (uniqueness constraint, not just application-level checking), threaded or flat comments TBD at spec time. Exercises JPA associations and cascade/orphan-removal semantics beyond the single-entity modules built so far.
 
 ### 5. Notification
 
-🚧 **Planned.** Fan-out notifications (e.g. "someone liked/commented on your post") processed asynchronously through a **queue** rather than inline in the request path, delivered to connected clients **in real time**. Concrete transport (Redis Streams/pub-sub vs. a dedicated broker, WebSocket vs. SSE) is a decision for that module's design spec, not fixed yet.
+**Planned.** Fan-out notifications (e.g. "someone liked/commented on your post") processed asynchronously through a **queue** rather than inline in the request path, delivered to connected clients **in real time**. Concrete transport (Redis Streams/pub-sub vs. a dedicated broker, WebSocket vs. SSE) is a decision for that module's design spec, not fixed yet.
 
 ## Tech Stack
 
